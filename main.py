@@ -1,28 +1,47 @@
-from email import header
-import requests
+from base64 import decode
+import imaplib
+import email
+from bs4 import BeautifulSoup
 
-mailslist = open("mails.txt", "r").readlines()
-
-url = "http://testphp.vulnweb.com/login.php"
-
-for mail in mailslist:
+mailslist = open("mails.txt", "r").readlines()  #accounts list
+for mail in mailslist:                          #multiple accounts           
+    imap_server = "imap.mail.ru"
     seq = mail.strip()
-    acc = seq.split(":")
+    acc= seq.split(":")
 
-    username = acc[0]
+    email_adrress = acc[0]
     password = acc[1]
-    account = username + ":" + password
 
-    header = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.82 Safari/537.36",
-        "uname": username,
-        "pass": password
-    }
+    imap = imaplib.IMAP4_SSL(imap_server)
+    imap.login(email_adrress, password)
 
-    req = requests.post(url, data=header).text
+    imap.select("inbox")
 
-    if not "username" in req:
-        print("Good: " + account)
-    else:
-        print("Bad: " + account)
+    _, msgnums = imap.search(None, "UNSEEN")
+
+    for msgnum in msgnums[0].split():
+        _, data = imap.fetch(msgnum, "(RFC822)")
+
+        _, b = data[0]
+        message = email.message_from_bytes(b)
+
+        print(f"Message Number: {msgnum}")
+        print(f"From: {message.get('From')}")
+        print(f"To: {message.get('To')}")
+        print(f"BCC: {message.get('BCC')}")
+        print(f"Date: {message.get('Date')}")
+        print(f"Subject: {message.get('subject')}")
+
+        print("Content:")
+        for part in message.walk():
+            if part.get_content_type() == "text/html" or part.get_content_type() == "text/plain":
+                body = part.get_payload()
+                
+                soup = BeautifulSoup(body, "lxml")
+                #page_code = soup.find('div', class_="button-container").find("style").text
+                page_code = soup.find_all("h2")
+                
+                for item in page_code:
+                    print(item.text)
+                    #newsletters
+imap.close() 
